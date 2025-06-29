@@ -8,24 +8,10 @@
 #
 
 import re
-
-PY2 = False
-PY3 = False
-
-try:
-    import urllib.parse as urlparse
-    from urllib.parse import quote as urllib_quote
-    from urllib.parse import quote_plus as urllib_quote_plus
-    from html.parser import HTMLParser
-    unicode = str
-    PY3 = True
-except ImportError:
-    # python 2
-    import urlparse
-    from urllib import quote as urllib_quote
-    from urllib import quote_plus as urllib_quote_plus
-    from HTMLParser import HTMLParser
-    PY2 = True
+import urllib.parse as urlparse
+from urllib.parse import quote as urllib_quote
+from urllib.parse import quote_plus as urllib_quote_plus
+from html.parser import HTMLParser
 
 
 def download_file(url_file_stream_or_string, site_cookies_dict=None, etag=None, modified=None, user_agent=None,
@@ -102,8 +88,9 @@ def url_fix(s, charset='utf-8'):
     :param charset: The target charset for the URL if the url was
                     given as unicode string.
     """
-    if PY2 and isinstance(s, unicode):
-        s = s.encode(charset, 'ignore')
+    # In Python 3.9+, strings are always unicode
+    if isinstance(s, bytes):
+        s = s.decode(charset, 'ignore')
 
     scheme, netloc, path, qs, anchor = urlparse.urlsplit(s)
     path = urllib_quote(path, safe="%/:=&?~#+!$,;'@()*[]")

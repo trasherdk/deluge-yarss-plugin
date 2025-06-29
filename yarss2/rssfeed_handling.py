@@ -383,7 +383,7 @@ class RSSFeedHandler(object):
     def handle_ttl(self, rssfeed_data, rssfeed_parsed, fetch_data):
         if rssfeed_data["obey_ttl"] is False:
             return
-        if "ttl" in rssfeed_parsed:
+        if "ttl" in rssfeed_parsed and rssfeed_parsed["ttl"] is not None:
             # Value is already TTL, so ignore
             try:
                 ttl = int(rssfeed_parsed["ttl"])
@@ -396,7 +396,7 @@ class RSSFeedHandler(object):
                 else:
                     self.log.warning("TTL value is invalid: %d" % ttl)
             except (ValueError, TypeError):
-                self.log.warning("Failed to convert TTL value '%s' to int!" % rssfeed_parsed["ttl"])
+                self.log.warning("Failed to convert TTL value '%s' to int!" % str(rssfeed_parsed["ttl"]))
         else:
             self.log.warning("RSS Feed '%s' should obey TTL, but feed has no TTL value." %
                              rssfeed_data["name"])
