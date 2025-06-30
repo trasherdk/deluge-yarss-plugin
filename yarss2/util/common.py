@@ -6,16 +6,12 @@
 # the additional special exception to link portions of this program with the OpenSSL library.
 # See LICENSE for more details.
 #
-from __future__ import print_function
 
 import datetime
 import os
 import sys
 
 import pkg_resources
-
-PY2 = sys.version_info.major == 2
-PY3 = sys.version_info.major == 3
 
 
 def get_version():
@@ -86,7 +82,7 @@ def isodate_to_datetime(date_in_isoformat):
     except ValueError as err:
         from yarss2.util import logging
         log = logging.getLogger(__name__)
-        log.warning("isodate_to_datetime error:", err)
+        log.warning("isodate_to_datetime error: %s" % str(err))
         return get_default_date()
 
 
@@ -198,61 +194,103 @@ def is_hidden(filepath):
     return name.startswith('.')
 
 
-def get_completion_paths(args):
+def get_subdirs(dirname):
     """
-    Takes a path value and returns the available completions.
-    If the path_value is a valid path, return all sub-directories.
-    If the path_value is not a valid path, remove the basename from the
-    path and return all sub-directories of path that start with basename.
-
-    :param args: options
-    :type args: dict
-    :returns: the args argument containing the available completions for the completion_text
-    :rtype: list
-
+    Return a list of subdirectories for the given path
+    (including the given path)
     """
-    args["paths"] = []
-    path_value = args["completion_text"]
-    hidden_files = args["show_hidden_files"]
+    dirlist = []
+    if os.path.isdir(dirname):
+        dirlist.append(dirname)
+        for subdir in os.listdir(dirname):
+            subdirpath = os.path.join(dirname, subdir)
+            if os.path.isdir(subdirpath):
+                dirlist.append(subdirpath)
+    return dirlist
 
-    def get_subdirs(dirname):
+
+def get_completion_paths(opts):
+    """
+    Returns the available path completions for the input value.
+
+    Args:
+        opts (dict): Dictionary containing completion options with keys:
+            - completion_text: The text to complete
+            - forward_completion: Whether this is forward completion
+
+    Returns:
+        dict: Dictionary with 'paths' key containing list of completion paths
+    """
+    completion_text = opts.get('completion_text', '')
+
+    # Handle empty string
+    if not completion_text:
         try:
-            if PY2:
-                return os.walk(dirname).__next__[1]
-            else:
-                return next(os.walk(dirname))[1]
-        except StopIteration:
-            # Invalid dirname
-            return []
+            paths = [os.path.expanduser('~')]
+            return {'paths': paths, 'completion_text': completion_text,
+                   'forward_completion': opts.get('forward_completion', True)}
+        except Exception:
+            return {'paths': [], 'completion_text': completion_text,
+                   'forward_completion': opts.get('forward_completion', True)}
 
-    dirname = os.path.dirname(path_value)
-    basename = os.path.basename(path_value)
+    # Expand user home directory
+    path = os.path.expanduser(completion_text)
 
-    dirs = get_subdirs(dirname)
-    # No completions available
-    if not dirs:
-        return args
+    # Get directory part
+    if os.path.isdir(path):
+        directory = path
+        filename_start = ''
+    else:
+        directory = os.path.dirname(path)
+        filename_start = os.path.basename(path)
 
-    # path_value ends with path separator so
-    # we only want all the subdirectories
-    if not basename:
-        # Lets remove hidden files
-        if not hidden_files:
-            old_dirs = dirs
-            dirs = []
-            for d in old_dirs:
-                if not is_hidden(os.path.join(dirname, d)):
-                    dirs.append(d)
-    matching_dirs = []
-    for s in dirs:
-        if s.startswith(basename):
-            p = os.path.join(dirname, s)
-            if not p.endswith(os.path.sep):
-                p += os.path.sep
-            matching_dirs.append(p)
+    # Get list of matching paths
+    paths = []
+    try:
+        if os.path.isdir(directory):
+            for item in os.listdir(directory):
+                if item.startswith(filename_start):
+                    full_path = os.path.join(directory, item)
+                    if os.path.isdir(full_path):
+                        # Add trailing slash for directories
+                        full_path = os.path.join(full_path, '')
+                    paths.append(full_path)
 
-    args["paths"] = sorted(matching_dirs)
-    return args
+            # Sort the paths
+            paths.sort()
+    except (OSError, IOError):
+        # If we can't read the directory, return empty list
+        paths = []
+
+    return {
+        'paths': paths,
+        'completion_text': completion_text,
+        'forward_completion': opts.get('forward_completion', True)
+    }
+
+
+def py3k_string_is_unicode(s):
+    """
+    True if string is Unicode string
+    """
+    return isinstance(s, str)
+
+
+def py3k_string_is_bytes(s):
+    """
+    True if string is bytes string
+    """
+    return isinstance(s, bytes)
+
+
+def py3k_string_as_unicode(s):
+    """
+    Convert string to unicode in a python3 compatible way.
+    """
+    if isinstance(s, bytes):
+        return s.decode("utf-8")
+    else:
+        return s
 
 
 class GeneralSubsConf:
@@ -265,10 +303,13 @@ class GeneralSubsConf:
         pass
 
     def get_boolean(self, value):
-        """input value should not be GeneralSubsConf.DEFAULT"""
-        return False if value == GeneralSubsConf.DISABLED else True
+        return value == GeneralSubsConf.ENABLED
 
     def bool_to_value(self, enabled, default):
+        """
+        enabled: if this value is set or not
+        default: if this value is default or not
+        """
         if default:
             return GeneralSubsConf.DEFAULT
         elif enabled:
@@ -279,14 +320,25 @@ class GeneralSubsConf:
 
 class TorrentDownload(dict):
     def __init__(self, d={}):
-        self["filedump"] = None
-        self["error_msg"] = None
+        dict.__init__(self)
         self["torrent_id"] = None
-        self["success"] = True
+        self["torrent_url"] = None
+        self["title"] = None
+        self["link"] = None
+        self["site_cookies_dict"] = None
+        self["user_agent"] = None
+        self["error_msg"] = None
+        self["success"] = True  # Default to success, set to False only on error
+        self["torrent_data"] = None
+        self["magnet"] = None
+        self["is_magnet"] = False  # Default to False for regular torrents
         self["url"] = None
-        self["is_magnet"] = False
-        self["cookies_dict"] = None
-        self.update(d)
+        self["filedump"] = None
+        self["cookies"] = None
+        self["headers"] = None
+        # Copy all keys in the dictionary d
+        for key in d.keys():
+            self[key] = d[key]
 
     def __getattr__(self, attr):
         return self[attr]
@@ -299,4 +351,4 @@ class TorrentDownload(dict):
         self["success"] = False
 
     def to_dict(self):
-        return self.copy()
+        return dict(self)

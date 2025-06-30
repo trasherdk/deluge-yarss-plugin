@@ -33,34 +33,63 @@ class TorrentHandler(object):
         download = TorrentDownload()
         download.url = torrent_url
         download.cookies = cookies
-        args = {"verify": False}
+        args = {"verify": False, "timeout": 30}  # Add 30 second timeout
         if cookies is not None:
             args["cookies"] = cookies
         if headers is not None:
             args["headers"] = headers
         download.headers = headers
+
         try:
+            self.log.info("Requesting torrent file from: %s" % torrent_url)
             r = requests.get(torrent_url, **args)
+
+            # Check HTTP status
+            if r.status_code != 200:
+                error_msg = "HTTP %d error downloading torrent: '%s'" % (r.status_code, torrent_url)
+                self.log.error(error_msg)
+                download.set_error(error_msg)
+                return download
+
+            # Check content type
+            content_type = r.headers.get('content-type', '').lower()
+            if 'html' in content_type:
+                error_msg = "Received HTML instead of torrent file from: '%s'. Content-Type: %s" % (torrent_url, content_type)
+                self.log.error(error_msg)
+                # Log first 500 chars of response for debugging
+                preview = r.text[:500] if hasattr(r, 'text') else str(r.content[:500])
+                self.log.error("Response preview: %s" % preview)
+                download.set_error(error_msg)
+                return download
+
             download.filedump = r.content
+            self.log.info("Downloaded %d bytes from: %s" % (len(download.filedump), torrent_url))
+
         except Exception as e:
             error_msg = "Failed to download torrent url: '%s'. Exception: %s" % (torrent_url, str(e))
             self.log.error(error_msg)
             download.set_error(error_msg)
             return download
 
-        if download.filedump is None:
-            error_msg = "Filedump is None"
+        if download.filedump is None or len(download.filedump) == 0:
+            error_msg = "Received empty file from: '%s'" % torrent_url
             download.set_error(error_msg)
-            self.log.warning(error_msg)
+            self.log.error(error_msg)
             return download
 
         try:
             # Get the info to see if any exceptions are raised
             lt.torrent_info(lt.bdecode(download.filedump))
+            self.log.info("Successfully validated torrent file from: %s" % torrent_url)
         except Exception as e:
             error_msg = "Unable to decode torrent file! (%s) URL: '%s'" % (str(e), torrent_url)
             download.set_error(error_msg)
             self.log.error(error_msg)
+            # Log first 200 bytes for debugging
+            preview = download.filedump[:200] if download.filedump else b"<None>"
+            self.log.error("File content preview: %s" % preview)
+            return download
+
         return download
 
     def get_torrent(self, torrent_info):
@@ -82,15 +111,21 @@ class TorrentHandler(object):
             self.log.info("Downloading torrent: '%s' using cookies: '%s', headers: '%s'" %
                           (url, str(site_cookies_dict), str(headers)), gtkui=True)
             download = self.download_torrent_file(url, cookies=site_cookies_dict, headers=headers)
+            # Store the URL for debugging
+            download.url = url
             # Error occured
             if not download.success:
+                self.log.error("Failed to download torrent from: %s. Error: %s" % (url, download.error_msg))
                 return download
-            # Get the torrent data from the torrent file
+            # Get the torrent data from the torrent file - this is redundant validation since
+            # download_torrent_file already validates, but keeping for compatibility
             try:
                 torrentinfo.TorrentInfo(filedump=download.filedump)
+                self.log.info("Torrent validation successful for: %s" % url)
             except Exception as e:
                 download.set_error("Unable to open torrent file: %s. Error: %s" % (url, str(e)))
                 self.log.warning(download.error_msg)
+                return download  # Return early on validation failure
         return download
 
     def add_torrent(self, torrent_info):
@@ -148,15 +183,22 @@ class TorrentHandler(object):
             except Exception as e:
                 download.set_error("Unable to open torrent file: %s. Error: %s" % (torrent_url, str(e)))
                 self.log.warning(download.error_msg)
+                return download  # Return early if torrent validation fails
 
             try:
+                self.log.info("Calling TorrentManager.add() with %d bytes of torrent data" % len(download.filedump))
                 download.torrent_id = component.get("TorrentManager").add(filedump=download.filedump,
                                                                           filename=os.path.basename(torrent_url),
                                                                           options=options)
+                self.log.info("Successfully added torrent to Deluge with ID: %s" % download.torrent_id)
             except AddTorrentError as err:
                 download.success = False
                 download.set_error("Failed to add torrent to Deluge: %s" % (str(err)))
                 self.log.warning(download.error_msg)
+            except Exception as err:
+                download.success = False
+                download.set_error("Unexpected error adding torrent to Deluge: %s" % (str(err)))
+                self.log.error(download.error_msg)
             else:
                 if ("Label" in component.get("Core").get_enabled_plugins()
                         and subscription_data and subscription_data.get("label", "")):

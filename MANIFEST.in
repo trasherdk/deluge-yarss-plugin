@@ -1,1 +1,8 @@
 recursive-include yarss2/include *
+# Exclude Python 2 Beautiful Soup files
+global-exclude yarss2/include/beautifulsoup/bs4/*
+global-exclude yarss2/include/beautifulsoup/scripts/*
+global-exclude yarss2/include/beautifulsoup/doc/*
+global-exclude yarss2/include/beautifulsoup/doc.zh/*
+prune yarss2/include/beautifulsoup/bs4
+prune yarss2/include/beautifulsoup/scripts

@@ -15,6 +15,12 @@
 # See LICENSE for more details.
 #
 
+from __future__ import unicode_literals
+
+import os.path
+
+from pkg_resources import resource_filename
+
 import sys
 
 import pkg_resources
@@ -36,9 +42,12 @@ def load_libs():
         log.info("Appending to sys.path: '%s'" % location)
 
 
+# Load bundled libraries immediately when the plugin module is imported
+load_libs()
+
+
 class CorePlugin(PluginInitBase):
     def __init__(self, plugin_name):
-        load_libs()
         from .core import Core as CorePluginClass
         self._plugin_cls = CorePluginClass
         super(CorePlugin, self).__init__(plugin_name)
@@ -46,7 +55,6 @@ class CorePlugin(PluginInitBase):
 
 class GtkUIPlugin(PluginInitBase):
     def __init__(self, plugin_name):
-        load_libs()
         from gtkui.gtkui import GtkUI as GtkUIPluginClass
         self._plugin_cls = GtkUIPluginClass
         super(GtkUIPlugin, self).__init__(plugin_name)
@@ -54,7 +62,6 @@ class GtkUIPlugin(PluginInitBase):
 
 class Gtk3UIPlugin(PluginInitBase):
     def __init__(self, plugin_name):
-        load_libs()
         from .gtk3ui.gtkui import GtkUI as GtkUIPluginClass
         self._plugin_cls = GtkUIPluginClass
         super(Gtk3UIPlugin, self).__init__(plugin_name)
@@ -65,3 +72,7 @@ class WebUIPlugin(PluginInitBase):
         from .webui import YaRSS2 as _pluginCls
         self._plugin_cls = _pluginCls
         super(WebUIPlugin, self).__init__(plugin_name)
+
+
+def get_resource(filename):
+    return resource_filename("yarss2", os.path.join("data", filename))

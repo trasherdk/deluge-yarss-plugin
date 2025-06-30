@@ -14,8 +14,6 @@ import os
 import sys
 import warnings
 
-from deluge.common import PY2
-
 from yarss2.util.common import get_completion_paths, get_resource
 
 from .common import Gdk, GObject, Gtk
@@ -1150,9 +1148,7 @@ class PathAutoCompleter(object):
 class PathChooserComboBox(Gtk.Box, StoredValuesPopup, GObject.GObject):
 
     __gsignals__ = {
-        signal
-        if not PY2
-        else signal.encode(): (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE, (object,))
+        signal: (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE, (object,))
         for signal in [
             'text-changed',
             'accelerator-set',

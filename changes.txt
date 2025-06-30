@@ -1,0 +1,2091 @@
+On branch trasherdk
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   README.md
+	modified:   setup.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	CHANGES.md
+	changes.txt
+
+no changes added to commit (use "git add" and/or "git commit -a")
+diff --git a/.github/dependabot.yml b/.github/dependabot.yml
+new file mode 100644
+index 0000000..f5e0594
+--- /dev/null
++++ b/.github/dependabot.yml
+@@ -0,0 +1,33 @@
++version: 2
++updates:
++  # Enable version updates for GitHub Actions
++  - package-ecosystem: "github-actions"
++    directory: "/"
++    schedule:
++      interval: "weekly"
++      day: "monday"
++    open-pull-requests-limit: 10
++    reviewers:
++      - "trasherdk"  # Replace with your GitHub username
++    commit-message:
++      prefix: "ci"
++      include: "scope"
++
++    # Enable version updates for Python dependencies (if you add requirements.txt later)
++  - package-ecosystem: "pip"
++    directory: "/"
++    schedule:
++      interval: "weekly"
++      day: "monday"
++    open-pull-requests-limit: 5
++    reviewers:
++      - "trasherdk"  # Replace with your GitHub username
++    commit-message:
++      prefix: "deps"
++      include: "scope"
++    ignore:
++      # Ignore updates to bundled library dev dependencies
++      - dependency-name: "tornado"
++        directory: "yarss2/include/urllib3/"
++      - dependency-name: "wheel"
++        directory: "yarss2/include/urllib3/"
+\ No newline at end of file
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..065b741
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,46 @@
++name: CI
++
++on:
++  push:
++    branches: [ main, master ]
++  pull_request:
++    branches: [ main, master ]
++
++jobs:
++  test:
++    runs-on: ubuntu-latest
++    strategy:
++      matrix:
++        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
++
++    steps:
++    - uses: actions/checkout@v4.2.2
++
++    - name: Set up Python ${{ matrix.python-version }}
++      uses: actions/setup-python@v5
++      with:
++        python-version: ${{ matrix.python-version }}
++
++    - name: Install system dependencies
++      run: |
++        sudo apt-get update
++        sudo apt-get install -y python3-gi python3-gi-cairo gir1.2-gtk-3.0
++
++    - name: Install Python dependencies
++      run: |
++        python -m pip install --upgrade pip
++        pip install tox
++        python setup.py develop
++
++    - name: Run tests with tox
++      run: |
++        tox -e pydef
++
++    - name: Run linting
++      run: |
++        tox -e flake8
++        tox -e isort
++
++    - name: Run complexity check
++      run: |
++        tox -e flake8-complexity
+\ No newline at end of file
+diff --git a/.travis.yml.deprecated b/.travis.yml.deprecated
+new file mode 100644
+index 0000000..8ff5760
+--- /dev/null
++++ b/.travis.yml.deprecated
+@@ -0,0 +1,59 @@
++# DEPRECATED: This file has been replaced by GitHub Actions (.github/workflows/ci.yml)
++# This Travis CI configuration is outdated and no longer maintained.
++# The project now requires Python 3.9+ and uses modern CI/CD practices.
++
++sudo: true
++
++language: python
++
++python:
++    - "2.7"
++
++before_install:
++  - lsb_release -a
++  - sudo add-apt-repository ppa:deluge-team/ppa -y
++  - sudo apt-get update
++
++# command to install dependencies
++install:
++  - bash -c "echo $APTPACKAGES"
++  - sudo apt-get install $APTPACKAGES
++  - easy_install -U pip
++  - pip --version
++  - pip install "tox==2.1.1"
++  - tox --version
++  - mkdir install
++  - export PYTHONPATH=$PYTHONPATH:$PWD/install
++  - python setup.py develop --install-dir=install
++
++env:
++  global:
++    - PIP_DOWNLOAD_CACHE=$HOME/.pip-cache/
++    - APTPACKAGES="deluge python-libtorrent python-gobject python-glade2"
++    - DISPLAY=:99.0
++  matrix:
++    - TOX_ENV=pydef              APTPACKAGES="$APTPACKAGES"
++    - TOX_ENV=all                APTPACKAGES="$APTPACKAGES"
++    - TOX_ENV=trial              APTPACKAGES="$APTPACKAGES"
++    - TOX_ENV=flake8
++    - TOX_ENV=flake8-complexity
++    - TOX_ENV=isort
++    - TOX_ENV=testcoverage
++    - TOX_ENV=testcoverage-html
++#    - TOX_ENV=docs
++#    - TOX_ENV=todo
++
++virtualenv:
++  system_site_packages: true
++
++# We use xvfb for the GTKUI tests
++before_script:
++  - python -c "import deluge; print deluge"
++  - python -c "import libtorrent as lt; print lt.version"
++  - "/sbin/start-stop-daemon --start --quiet --pidfile /tmp/custom_xvfb_99.pid --make-pidfile --background --exec /usr/bin/Xvfb -- :99 -ac -screen 0 1280x1024x16"
++
++script:
++  - bash -c "echo $DISPLAY"
++  - bash -c "echo $PWD"
++  - bash -c "echo $PYTHONPATH"
++  - tox -e $TOX_ENV
+\ No newline at end of file
+diff --git a/.vscode/settings.json b/.vscode/settings.json
+new file mode 100644
+index 0000000..03c3a7d
+--- /dev/null
++++ b/.vscode/settings.json
+@@ -0,0 +1,3 @@
++{
++	"makefile.configureOnOpen": false
++}
+\ No newline at end of file
+diff --git a/MANIFEST.in b/MANIFEST.in
+index 8068574..0737d97 100644
+--- a/MANIFEST.in
++++ b/MANIFEST.in
+@@ -1 +1,8 @@
+-recursive-include yarss2/include *
+\ No newline at end of file
++recursive-include yarss2/include *
++# Exclude Python 2 Beautiful Soup files
++global-exclude yarss2/include/beautifulsoup/bs4/*
++global-exclude yarss2/include/beautifulsoup/scripts/*
++global-exclude yarss2/include/beautifulsoup/doc/*
++global-exclude yarss2/include/beautifulsoup/doc.zh/*
++prune yarss2/include/beautifulsoup/bs4
++prune yarss2/include/beautifulsoup/scripts
+\ No newline at end of file
+diff --git a/Makefile b/Makefile
+index 1e1702b..f379ff8 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,7 +1,45 @@
++.PHONY: all clean cleanpyc build build-no-increment help
+ 
++# Default target - clean and build (no version increment)
++all: clean build-no-increment
++
++# Comprehensive clean target
++clean: cleanpyc
++	@echo "Cleaning build artifacts..."
++	-rm -rf build/
++	-rm -rf dist/
++	-rm -rf *.egg-info/
++	-rm -rf .tox/
++	@echo "Clean complete."
++
++# Clean Python cache files
+ cleanpyc:
++	@echo "Cleaning Python cache files..."
+ 	-find . -name "*.pyc" -delete
+-	-find . -name __pycache__ -exec rm -rf {} \;
++	-find . -name "*.pyo" -delete
++	-find . -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
++	-find . -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
++
++# Build using build.py (auto-increments version)
++build:
++	@echo "Building YaRSS2 plugin..."
++	python3 build.py
++
++# Build without version increment (direct setup.py call)
++build-no-increment: cleanpyc
++	@echo "Building YaRSS2 plugin (no version increment)..."
++	python3 setup.py bdist_egg
++
++# Legacy target for compatibility
++buildegg: build-no-increment
+ 
+-buildegg: cleanpyc
+-	python setup.py bdist_egg
++# Help target
++help:
++	@echo "Available targets:"
++	@echo "  all               - Clean and build without version increment (default)"
++	@echo "  clean             - Remove all build artifacts"
++	@echo "  cleanpyc          - Remove Python cache files"
++	@echo "  build             - Build plugin (auto-increments version)"
++	@echo "  build-no-increment- Build plugin without incrementing version"
++	@echo "  buildegg          - Legacy alias for build-no-increment"
++	@echo "  help              - Show this help message"
+diff --git a/README.md b/README.md
+index acae7b5..917363c 100644
+--- a/README.md
++++ b/README.md
+@@ -1,19 +1,93 @@
+-## YaRSS2 : Yet another RSS 2, a RSS plugin for Deluge ##
++# YaRSS2 - Yet Another RSS 2
+ 
+-Author: Bro <bro.development@gmail.com>
++Yet another RSS 2, a simple RSS plugin for Deluge, based on YaRSS written by Camillo Dell'mour.
+ 
+-Based on YaRSS by Camillo Dell'mour
++## Requirements
+ 
+-License: GPLv3
++- **Python 3.9 or later**
++- Deluge 2.0+
++- GTK 3.0+
+ 
+-## Building the plugin ##
++## Installation
+ 
++Download the latest release from the [releases page](../../releases) and install it via the Deluge plugin manager.
++
++## Development
++
++### Prerequisites
++
++- Python 3.9 or later
++- Deluge development environment
++- GTK development libraries
++
++### Setup
++
++1. Clone the repository
++2. Install development dependencies: `pip install tox`
++3. Run tests: `tox`
++4. Run specific Python version tests: `tox -e py39` (or py310, py311, py312, py313)
++
++### Building
++
++This project includes a modern build system with multiple options:
++
++#### Using Make (Recommended)
++
++```bash
++# Quick build (clean + build without version increment)
++make
++
++# Build with automatic version increment
++make build
++
++# Clean all build artifacts
++make clean
++
++# Show all available targets
++make help
+ ```
+-#!bash
+ 
+-$ python setup.py bdist_egg
++#### Using the Automated Build Script
++
++```bash
++# Full automated build with version increment
++python3 build.py
++```
++
++#### Manual Building
++
++```bash
++# Direct setup.py build
++python3 setup.py bdist_egg
+ ```
+ 
++#### Available Make Targets
++
++- `make all` (default) - Clean and build without version increment
++- `make clean` - Remove all build artifacts (dist/, build/, .tox/, cache files)
++- `make cleanpyc` - Remove only Python cache files
++- `make build` - Build with automatic version increment
++- `make build-no-increment` - Build without changing version
++- `make buildegg` - Legacy alias for build-no-increment
++- `make help` - Show help with all available targets
++
++The built .egg file will be located in the `dist/` directory.
++
++## Compatibility
++
++This plugin requires **Python 3.9 or later**. It has been tested with:
++
++- Python 3.9+
++- Deluge 2.0+
++- Both Linux and Windows environments
++
++## Changelog
++
++See [CHANGES.md](CHANGES.md) for detailed information about recent improvements and changes.
++
++## License
++
++This project is licensed under the GNU General Public License v3.0 or later. See the LICENSE file for details.
+ 
+ ## Running the tests ##
+ The directory containing yarss2 must be on the PYTHONPATH
+diff --git a/build.py b/build.py
+new file mode 100755
+index 0000000..ed0dbdb
+--- /dev/null
++++ b/build.py
+@@ -0,0 +1,89 @@
++#!/usr/bin/env python3
++"""
++Auto-build script for YaRSS2
++Automatically increments version and builds with proper Python version tags
++"""
++import subprocess
++import sys
++import os
++import shutil
++import re
++
++def increment_version():
++    """Increment the patch version in setup.py"""
++    with open('setup.py', 'r') as f:
++        content = f.read()
++
++    # Find the version line
++    version_pattern = r'__version__ = "(\d+)\.(\d+)\.(\d+)"'
++    match = re.search(version_pattern, content)
++
++    if not match:
++        print("Could not find version string in setup.py")
++        return None
++
++    major, minor, patch = match.groups()
++    current_version = f"{major}.{minor}.{patch}"
++
++    # Increment patch version
++    new_patch = int(patch) + 1
++    new_version = f"{major}.{minor}.{new_patch}"
++
++    # Replace in content
++    new_content = re.sub(
++        version_pattern,
++        f'__version__ = "{new_version}"',
++        content
++    )
++
++    # Write back to file
++    with open('setup.py', 'w') as f:
++        f.write(new_content)
++
++    print(f"Version incremented: {current_version} -> {new_version}")
++    return new_version
++
++
++
++def main():
++    print("=== YaRSS2 Auto-Build Script ===")
++
++    # Clean previous builds
++    print("Cleaning previous builds...")
++    for dir_name in ['dist', 'build', 'YaRSS2.egg-info']:
++        if os.path.exists(dir_name):
++            shutil.rmtree(dir_name)
++            print(f"Removed {dir_name}/")
++
++    # Auto-increment version
++    print("\nIncrementing version...")
++    new_version = increment_version()
++    if not new_version:
++        print("Failed to increment version, exiting...")
++        sys.exit(1)
++
++    # Build
++    print(f"\nBuilding YaRSS2 v{new_version}...")
++    print("Running: python3 setup.py bdist_egg")
++    result = subprocess.run([sys.executable, 'setup.py', 'bdist_egg'])
++
++    if result.returncode != 0:
++        print(f"Build failed with exit code: {result.returncode}")
++        sys.exit(1)
++
++    print("Build successful!")
++
++    # Skip renaming - keep the accurate py3.9 tag
++    print("\nKeeping accurate Python version tag (py3.9)")
++
++    # Show final results
++    print("\n=== Build Complete ===")
++    if os.path.exists('dist'):
++        files = os.listdir('dist')
++        for file in files:
++            file_path = os.path.join('dist', file)
++            size = os.path.getsize(file_path)
++            print(f"Created: dist/{file} ({size:,} bytes)")
++
++if __name__ == "__main__":
++    main()
+\ No newline at end of file
+diff --git a/setup.py b/setup.py
+old mode 100644
+new mode 100755
+index f90173f..fbe03d4
+--- a/setup.py
++++ b/setup.py
+@@ -10,12 +10,13 @@
+ # See LICENSE for more details.
+ #
+ 
++import sys
+ from setuptools import find_packages, setup
+ 
+ __plugin_name__ = "YaRSS2"
+ __author__ = "Bro"
+ __author_email__ = "bro.devel+yarss2@gmail.com"
+-__version__ = "2.1.5"
++__version__ = "2.2.0"
+ __url__ = "http://dev.deluge-torrent.org/wiki/Plugins/YaRSS2"
+ __license__ = "GPLv3"
+ __description__ = "Yet another RSS 2"
+@@ -25,8 +26,15 @@ YaRSS written by Camillo Dell'mour <cdellmour@gmail.com>.
+ Tested with Deluge 2.0.3.
+ """
+ 
++# Print build info
++print(f"Building YaRSS2 version {__version__}")
++
+ __pkg_data__ = {__plugin_name__.lower(): ["data/*"]}
+-packages = find_packages(exclude=["yarss2.tests"])
++packages = find_packages(exclude=[
++    "yarss2.tests",
++    "yarss2.include.beautifulsoup.bs4*",
++    "yarss2.include.beautifulsoup.scripts*"
++])
+ 
+ setup(
+     name=__plugin_name__,
+@@ -37,6 +45,24 @@ setup(
+     url=__url__,
+     license=__license__,
+     long_description=__long_description__ if __long_description__ else __description__,
++    python_requires=">=3.9",
++    zip_safe=False,
++    classifiers=[
++        "Development Status :: 5 - Production/Stable",
++        "Environment :: X11 Applications :: GTK",
++        "Intended Audience :: End Users/Desktop",
++        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
++        "Operating System :: POSIX :: Linux",
++        "Operating System :: Microsoft :: Windows",
++        "Programming Language :: Python :: 3",
++        "Programming Language :: Python :: 3.9",
++        "Programming Language :: Python :: 3.10",
++        "Programming Language :: Python :: 3.11",
++        "Programming Language :: Python :: 3.12",
++        "Programming Language :: Python :: 3.13",
++        "Topic :: Communications :: File Sharing",
++        "Topic :: Internet :: WWW/HTTP :: Dynamic Content :: News/Diary",
++    ],
+     include_package_data=True,
+     packages=packages,
+     package_data=__pkg_data__,
+@@ -50,6 +76,7 @@ setup(
+ %s = %s:Gtk3UIPlugin
+ [yarss2.libpaths]
+ include = yarss2.include
++six = yarss2.include.six
+ requests = yarss2.include.requests
+ dateutil = yarss2.include.dateutil
+ defusedxml = yarss2.include.defusedxml
+diff --git a/tox.ini b/tox.ini
+index 29afabb..521014e 100644
+--- a/tox.ini
++++ b/tox.ini
+@@ -82,14 +82,25 @@ sitepackages = true
+ commands =
+     pytest -v -s --reactor=default -m "todo" yarss2/tests
+ 
+-[testenv:py36]
+-basepython = python3.6
++[testenv:py39]
++basepython = python3.9
+ commands = {[testenv:pydef]commands}
+ 
+-[testenv:py37]
+-basepython = python3.7
++[testenv:py310]
++basepython = python3.10
+ commands = {[testenv:pydef]commands}
+ 
++[testenv:py311]
++basepython = python3.11
++commands = {[testenv:pydef]commands}
++
++[testenv:py312]
++basepython = python3.12
++commands = {[testenv:pydef]commands}
++
++[testenv:py313]
++basepython = python3.13
++commands = {[testenv:pydef]commands}
+ 
+ ###########################
+ # Code style verification
+diff --git a/yarss2/__init__.py b/yarss2/__init__.py
+index 0b7ba26..620535b 100644
+--- a/yarss2/__init__.py
++++ b/yarss2/__init__.py
+@@ -15,6 +15,12 @@
+ # See LICENSE for more details.
+ #
+ 
++from __future__ import unicode_literals
++
++import os.path
++
++from pkg_resources import resource_filename
++
+ import sys
+ 
+ import pkg_resources
+@@ -36,9 +42,12 @@ def load_libs():
+         log.info("Appending to sys.path: '%s'" % location)
+ 
+ 
++# Load bundled libraries immediately when the plugin module is imported
++load_libs()
++
++
+ class CorePlugin(PluginInitBase):
+     def __init__(self, plugin_name):
+-        load_libs()
+         from .core import Core as CorePluginClass
+         self._plugin_cls = CorePluginClass
+         super(CorePlugin, self).__init__(plugin_name)
+@@ -46,7 +55,6 @@ class CorePlugin(PluginInitBase):
+ 
+ class GtkUIPlugin(PluginInitBase):
+     def __init__(self, plugin_name):
+-        load_libs()
+         from gtkui.gtkui import GtkUI as GtkUIPluginClass
+         self._plugin_cls = GtkUIPluginClass
+         super(GtkUIPlugin, self).__init__(plugin_name)
+@@ -54,7 +62,6 @@ class GtkUIPlugin(PluginInitBase):
+ 
+ class Gtk3UIPlugin(PluginInitBase):
+     def __init__(self, plugin_name):
+-        load_libs()
+         from .gtk3ui.gtkui import GtkUI as GtkUIPluginClass
+         self._plugin_cls = GtkUIPluginClass
+         super(Gtk3UIPlugin, self).__init__(plugin_name)
+@@ -65,3 +72,7 @@ class WebUIPlugin(PluginInitBase):
+         from .webui import YaRSS2 as _pluginCls
+         self._plugin_cls = _pluginCls
+         super(WebUIPlugin, self).__init__(plugin_name)
++
++
++def get_resource(filename):
++    return resource_filename("yarss2", os.path.join("data", filename))
+diff --git a/yarss2/gtk3ui/path_combo_chooser.py b/yarss2/gtk3ui/path_combo_chooser.py
+index cff34b8..cd5fb5f 100755
+--- a/yarss2/gtk3ui/path_combo_chooser.py
++++ b/yarss2/gtk3ui/path_combo_chooser.py
+@@ -14,8 +14,6 @@ import os
+ import sys
+ import warnings
+ 
+-from deluge.common import PY2
+-
+ from yarss2.util.common import get_completion_paths, get_resource
+ 
+ from .common import Gdk, GObject, Gtk
+@@ -1150,9 +1148,7 @@ class PathAutoCompleter(object):
+ class PathChooserComboBox(Gtk.Box, StoredValuesPopup, GObject.GObject):
+ 
+     __gsignals__ = {
+-        signal
+-        if not PY2
+-        else signal.encode(): (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE, (object,))
++        signal: (GObject.SignalFlags.RUN_FIRST, GObject.TYPE_NONE, (object,))
+         for signal in [
+             'text-changed',
+             'accelerator-set',
+diff --git a/yarss2/include/__init__.py b/yarss2/include/__init__.py
+index e69de29..2954fdd 100644
+--- a/yarss2/include/__init__.py
++++ b/yarss2/include/__init__.py
+@@ -0,0 +1,23 @@
++# -*- coding: utf-8 -*-
++#
++# Copyright (C) 2012-2015 bendikro bro.devel+yarss2@gmail.com
++#
++# This file is part of YaRSS2 and is licensed under GNU General Public License 3.0, or later, with
++# the additional special exception to link portions of this program with the OpenSSL library.
++# See LICENSE for more details.
++#
++
++import os
++import sys
++
++# Add the include directory to sys.path so bundled libraries can find each other
++include_dir = os.path.dirname(__file__)
++if include_dir not in sys.path:
++    sys.path.insert(0, include_dir)
++
++# Import and expose the six module so other libraries can find it
++try:
++    from . import six
++    sys.modules['six'] = six
++except ImportError:
++    pass
+diff --git a/yarss2/include/six.py b/yarss2/include/six.py
+new file mode 100644
+index 0000000..4e15675
+--- /dev/null
++++ b/yarss2/include/six.py
+@@ -0,0 +1,998 @@
++# Copyright (c) 2010-2020 Benjamin Peterson
++#
++# Permission is hereby granted, free of charge, to any person obtaining a copy
++# of this software and associated documentation files (the "Software"), to deal
++# in the Software without restriction, including without limitation the rights
++# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++# copies of the Software, and to permit persons to whom the Software is
++# furnished to do so, subject to the following conditions:
++#
++# The above copyright notice and this permission notice shall be included in all
++# copies or substantial portions of the Software.
++#
++# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++# SOFTWARE.
++
++"""Utilities for writing code that runs on Python 2 and 3"""
++
++from __future__ import absolute_import
++
++import functools
++import itertools
++import operator
++import sys
++import types
++
++__author__ = "Benjamin Peterson <benjamin@python.org>"
++__version__ = "1.16.0"
++
++
++# Useful for very coarse version differentiation.
++PY2 = sys.version_info[0] == 2
++PY3 = sys.version_info[0] == 3
++PY34 = sys.version_info[0:2] >= (3, 4)
++
++if PY3:
++    string_types = str,
++    integer_types = int,
++    class_types = type,
++    text_type = str
++    binary_type = bytes
++
++    MAXSIZE = sys.maxsize
++else:
++    string_types = basestring,
++    integer_types = (int, long)
++    class_types = (type, types.ClassType)
++    text_type = unicode
++    binary_type = str
++
++    if sys.platform.startswith("java"):
++        # Jython always uses 32 bits.
++        MAXSIZE = int((1 << 31) - 1)
++    else:
++        # It's possible to have sizeof(long) != sizeof(Py_ssize_t).
++        class X(object):
++
++            def __len__(self):
++                return 1 << 31
++        try:
++            len(X())
++        except OverflowError:
++            # 32-bit
++            MAXSIZE = int((1 << 31) - 1)
++        else:
++            # 64-bit
++            MAXSIZE = int((1 << 63) - 1)
++        del X
++
++if PY34:
++    from importlib.util import spec_from_loader
++else:
++    spec_from_loader = None
++
++
++def _add_doc(func, doc):
++    """Add documentation to a function."""
++    func.__doc__ = doc
++
++
++def _import_module(name):
++    """Import module, returning the module after the last dot."""
++    __import__(name)
++    return sys.modules[name]
++
++
++class _LazyDescr(object):
++
++    def __init__(self, name):
++        self.name = name
++
++    def __get__(self, obj, tp):
++        result = self._resolve()
++        setattr(obj, self.name, result)  # Invokes __set__.
++        try:
++            # This is a bit ugly, but it avoids running this again by
++            # removing this descriptor.
++            delattr(obj.__class__, self.name)
++        except AttributeError:
++            pass
++        return result
++
++
++class MovedModule(_LazyDescr):
++
++    def __init__(self, name, old, new=None):
++        super(MovedModule, self).__init__(name)
++        if PY3:
++            if new is None:
++                new = name
++            self.mod = new
++        else:
++            self.mod = old
++
++    def _resolve(self):
++        return _import_module(self.mod)
++
++    def __getattr__(self, attr):
++        _module = self._resolve()
++        value = getattr(_module, attr)
++        setattr(self, attr, value)
++        return value
++
++
++class _LazyModule(types.ModuleType):
++
++    def __init__(self, name):
++        super(_LazyModule, self).__init__(name)
++        self.__doc__ = self.__class__.__doc__
++
++    def __dir__(self):
++        attrs = ["__doc__", "__name__"]
++        attrs += [attr.name for attr in self._moved_attributes]
++        return attrs
++
++    # Subclasses should override this
++    _moved_attributes = []
++
++
++class MovedAttribute(_LazyDescr):
++
++    def __init__(self, name, old_mod, new_mod, old_attr=None, new_attr=None):
++        super(MovedAttribute, self).__init__(name)
++        if PY3:
++            if new_mod is None:
++                new_mod = name
++            self.mod = new_mod
++            if new_attr is None:
++                if old_attr is None:
++                    new_attr = name
++                else:
++                    new_attr = old_attr
++            self.attr = new_attr
++        else:
++            self.mod = old_mod
++            if old_attr is None:
++                old_attr = name
++            self.attr = old_attr
++
++    def _resolve(self):
++        module = _import_module(self.mod)
++        return getattr(module, self.attr)
++
++
++class _SixMetaPathImporter(object):
++
++    """
++    A meta path importer to import six.moves and its submodules.
++
++    This class implements a PEP302 finder and loader. It should be compatible
++    with Python 2.5 and all existing versions of Python3
++    """
++
++    def __init__(self, six_module_name):
++        self.name = six_module_name
++        self.known_modules = {}
++
++    def _add_module(self, mod, *fullnames):
++        for fullname in fullnames:
++            self.known_modules[self.name + "." + fullname] = mod
++
++    def _get_module(self, fullname):
++        return self.known_modules[self.name + "." + fullname]
++
++    def find_module(self, fullname, path=None):
++        if fullname in self.known_modules:
++            return self
++        return None
++
++    def find_spec(self, fullname, path, target=None):
++        if fullname in self.known_modules:
++            return spec_from_loader(fullname, self)
++        return None
++
++    def __get_module(self, fullname):
++        try:
++            return self.known_modules[fullname]
++        except KeyError:
++            raise ImportError("This loader does not know module " + fullname)
++
++    def load_module(self, fullname):
++        try:
++            # in case of a reload
++            return sys.modules[fullname]
++        except KeyError:
++            pass
++        mod = self.__get_module(fullname)
++        if isinstance(mod, MovedModule):
++            mod = mod._resolve()
++        else:
++            mod.__loader__ = self
++        sys.modules[fullname] = mod
++        return mod
++
++    def is_package(self, fullname):
++        """
++        Return true, if the named module is a package.
++
++        We need this method to get correct spec objects with
++        Python 3.4 (see PEP451)
++        """
++        return hasattr(self.__get_module(fullname), "__path__")
++
++    def get_code(self, fullname):
++        """Return None
++
++        Required, if is_package is implemented"""
++        self.__get_module(fullname)  # eventually raises ImportError
++        return None
++    get_source = get_code  # same as get_code
++
++    def create_module(self, spec):
++        return self.load_module(spec.name)
++
++    def exec_module(self, module):
++        pass
++
++_importer = _SixMetaPathImporter(__name__)
++
++
++class _MovedItems(_LazyModule):
++
++    """Lazy loading of moved objects"""
++    __path__ = []  # mark as package
++
++
++_moved_attributes = [
++    MovedAttribute("cStringIO", "cStringIO", "io", "StringIO"),
++    MovedAttribute("filter", "itertools", "builtins", "ifilter", "filter"),
++    MovedAttribute("filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"),
++    MovedAttribute("input", "__builtin__", "builtins", "raw_input", "input"),
++    MovedAttribute("intern", "__builtin__", "sys"),
++    MovedAttribute("map", "itertools", "builtins", "imap", "map"),
++    MovedAttribute("getcwd", "os", "os", "getcwdu", "getcwd"),
++    MovedAttribute("getcwdb", "os", "os", "getcwd", "getcwdb"),
++    MovedAttribute("getoutput", "commands", "subprocess"),
++    MovedAttribute("range", "__builtin__", "builtins", "xrange", "range"),
++    MovedAttribute("reload_module", "__builtin__", "importlib" if PY34 else "imp", "reload"),
++    MovedAttribute("reduce", "__builtin__", "functools"),
++    MovedAttribute("shlex_quote", "pipes", "shlex", "quote"),
++    MovedAttribute("StringIO", "StringIO", "io"),
++    MovedAttribute("UserDict", "UserDict", "collections"),
++    MovedAttribute("UserList", "UserList", "collections"),
++    MovedAttribute("UserString", "UserString", "collections"),
++    MovedAttribute("xrange", "__builtin__", "builtins", "xrange", "range"),
++    MovedAttribute("zip", "itertools", "builtins", "izip", "zip"),
++    MovedAttribute("zip_longest", "itertools", "itertools", "izip_longest", "zip_longest"),
++    MovedModule("builtins", "__builtin__"),
++    MovedModule("configparser", "ConfigParser"),
++    MovedModule("collections_abc", "collections", "collections.abc" if sys.version_info >= (3, 3) else "collections"),
++    MovedModule("copyreg", "copy_reg"),
++    MovedModule("dbm_gnu", "gdbm", "dbm.gnu"),
++    MovedModule("dbm_ndbm", "dbm", "dbm.ndbm"),
++    MovedModule("_dummy_thread", "dummy_thread", "_dummy_thread" if sys.version_info < (3, 9) else "_thread"),
++    MovedModule("http_cookiejar", "cookielib", "http.cookiejar"),
++    MovedModule("http_cookies", "Cookie", "http.cookies"),
++    MovedModule("html_entities", "htmlentitydefs", "html.entities"),
++    MovedModule("html_parser", "HTMLParser", "html.parser"),
++    MovedModule("http_client", "httplib", "http.client"),
++    MovedModule("email_mime_base", "email.MIMEBase", "email.mime.base"),
++    MovedModule("email_mime_image", "email.MIMEImage", "email.mime.image"),
++    MovedModule("email_mime_multipart", "email.MIMEMultipart", "email.mime.multipart"),
++    MovedModule("email_mime_nonmultipart", "email.MIMENonMultipart", "email.mime.nonmultipart"),
++    MovedModule("email_mime_text", "email.MIMEText", "email.mime.text"),
++    MovedModule("BaseHTTPServer", "BaseHTTPServer", "http.server"),
++    MovedModule("CGIHTTPServer", "CGIHTTPServer", "http.server"),
++    MovedModule("SimpleHTTPServer", "SimpleHTTPServer", "http.server"),
++    MovedModule("cPickle", "cPickle", "pickle"),
++    MovedModule("queue", "Queue"),
++    MovedModule("reprlib", "repr"),
++    MovedModule("socketserver", "SocketServer"),
++    MovedModule("_thread", "thread", "_thread"),
++    MovedModule("tkinter", "Tkinter"),
++    MovedModule("tkinter_dialog", "Dialog", "tkinter.dialog"),
++    MovedModule("tkinter_filedialog", "FileDialog", "tkinter.filedialog"),
++    MovedModule("tkinter_scrolledtext", "ScrolledText", "tkinter.scrolledtext"),
++    MovedModule("tkinter_simpledialog", "SimpleDialog", "tkinter.simpledialog"),
++    MovedModule("tkinter_tix", "Tix", "tkinter.tix"),
++    MovedModule("tkinter_ttk", "ttk", "tkinter.ttk"),
++    MovedModule("tkinter_constants", "Tkconstants", "tkinter.constants"),
++    MovedModule("tkinter_dnd", "Tkdnd", "tkinter.dnd"),
++    MovedModule("tkinter_colorchooser", "tkColorChooser",
++                "tkinter.colorchooser"),
++    MovedModule("tkinter_commondialog", "tkCommonDialog",
++                "tkinter.commondialog"),
++    MovedModule("tkinter_tkfiledialog", "tkFileDialog", "tkinter.filedialog"),
++    MovedModule("tkinter_font", "tkFont", "tkinter.font"),
++    MovedModule("tkinter_messagebox", "tkMessageBox", "tkinter.messagebox"),
++    MovedModule("tkinter_tksimpledialog", "tkSimpleDialog",
++                "tkinter.simpledialog"),
++    MovedModule("urllib_parse", __name__ + ".moves.urllib_parse", "urllib.parse"),
++    MovedModule("urllib_error", __name__ + ".moves.urllib_error", "urllib.error"),
++    MovedModule("urllib", __name__ + ".moves.urllib", __name__ + ".moves.urllib"),
++    MovedModule("urllib_robotparser", "robotparser", "urllib.robotparser"),
++    MovedModule("xmlrpc_client", "xmlrpclib", "xmlrpc.client"),
++    MovedModule("xmlrpc_server", "SimpleXMLRPCServer", "xmlrpc.server"),
++]
++# Add windows specific modules.
++if sys.platform == "win32":
++    _moved_attributes += [
++        MovedModule("winreg", "_winreg"),
++    ]
++
++for attr in _moved_attributes:
++    setattr(_MovedItems, attr.name, attr)
++    if isinstance(attr, MovedModule):
++        _importer._add_module(attr, "moves." + attr.name)
++del attr
++
++_MovedItems._moved_attributes = _moved_attributes
++
++moves = _MovedItems(__name__ + ".moves")
++_importer._add_module(moves, "moves")
++
++
++class Module_six_moves_urllib_parse(_LazyModule):
++
++    """Lazy loading of moved objects in six.moves.urllib_parse"""
++
++
++_urllib_parse_moved_attributes = [
++    MovedAttribute("ParseResult", "urlparse", "urllib.parse"),
++    MovedAttribute("SplitResult", "urlparse", "urllib.parse"),
++    MovedAttribute("parse_qs", "urlparse", "urllib.parse"),
++    MovedAttribute("parse_qsl", "urlparse", "urllib.parse"),
++    MovedAttribute("urldefrag", "urlparse", "urllib.parse"),
++    MovedAttribute("urljoin", "urlparse", "urllib.parse"),
++    MovedAttribute("urlparse", "urlparse", "urllib.parse"),
++    MovedAttribute("urlsplit", "urlparse", "urllib.parse"),
++    MovedAttribute("urlunparse", "urlparse", "urllib.parse"),
++    MovedAttribute("urlunsplit", "urlparse", "urllib.parse"),
++    MovedAttribute("quote", "urllib", "urllib.parse"),
++    MovedAttribute("quote_plus", "urllib", "urllib.parse"),
++    MovedAttribute("unquote", "urllib", "urllib.parse"),
++    MovedAttribute("unquote_plus", "urllib", "urllib.parse"),
++    MovedAttribute("unquote_to_bytes", "urllib", "urllib.parse", "unquote", "unquote_to_bytes"),
++    MovedAttribute("urlencode", "urllib", "urllib.parse"),
++    MovedAttribute("splitquery", "urllib", "urllib.parse"),
++    MovedAttribute("splittag", "urllib", "urllib.parse"),
++    MovedAttribute("splituser", "urllib", "urllib.parse"),
++    MovedAttribute("splitvalue", "urllib", "urllib.parse"),
++    MovedAttribute("uses_fragment", "urlparse", "urllib.parse"),
++    MovedAttribute("uses_netloc", "urlparse", "urllib.parse"),
++    MovedAttribute("uses_params", "urlparse", "urllib.parse"),
++    MovedAttribute("uses_query", "urlparse", "urllib.parse"),
++    MovedAttribute("uses_relative", "urlparse", "urllib.parse"),
++]
++for attr in _urllib_parse_moved_attributes:
++    setattr(Module_six_moves_urllib_parse, attr.name, attr)
++del attr
++
++Module_six_moves_urllib_parse._moved_attributes = _urllib_parse_moved_attributes
++
++_importer._add_module(Module_six_moves_urllib_parse(__name__ + ".moves.urllib_parse"),
++                      "moves.urllib_parse", "moves.urllib.parse")
++
++
++class Module_six_moves_urllib_error(_LazyModule):
++
++    """Lazy loading of moved objects in six.moves.urllib_error"""
++
++
++_urllib_error_moved_attributes = [
++    MovedAttribute("URLError", "urllib2", "urllib.error"),
++    MovedAttribute("HTTPError", "urllib2", "urllib.error"),
++    MovedAttribute("ContentTooShortError", "urllib", "urllib.error"),
++]
++for attr in _urllib_error_moved_attributes:
++    setattr(Module_six_moves_urllib_error, attr.name, attr)
++del attr
++
++Module_six_moves_urllib_error._moved_attributes = _urllib_error_moved_attributes
++
++_importer._add_module(Module_six_moves_urllib_error(__name__ + ".moves.urllib.error"),
++                      "moves.urllib_error", "moves.urllib.error")
++
++
++class Module_six_moves_urllib_request(_LazyModule):
++
++    """Lazy loading of moved objects in six.moves.urllib_request"""
++
++
++_urllib_request_moved_attributes = [
++    MovedAttribute("urlopen", "urllib2", "urllib.request"),
++    MovedAttribute("install_opener", "urllib2", "urllib.request"),
++    MovedAttribute("build_opener", "urllib2", "urllib.request"),
++    MovedAttribute("pathname2url", "urllib", "urllib.request"),
++    MovedAttribute("url2pathname", "urllib", "urllib.request"),
++    MovedAttribute("getproxies", "urllib", "urllib.request"),
++    MovedAttribute("Request", "urllib2", "urllib.request"),
++    MovedAttribute("OpenerDirector", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPDefaultErrorHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPRedirectHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPCookieProcessor", "urllib2", "urllib.request"),
++    MovedAttribute("ProxyHandler", "urllib2", "urllib.request"),
++    MovedAttribute("BaseHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPPasswordMgr", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPPasswordMgrWithDefaultRealm", "urllib2", "urllib.request"),
++    MovedAttribute("AbstractBasicAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPBasicAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("ProxyBasicAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("AbstractDigestAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPDigestAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("ProxyDigestAuthHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPSHandler", "urllib2", "urllib.request"),
++    MovedAttribute("FileHandler", "urllib2", "urllib.request"),
++    MovedAttribute("FTPHandler", "urllib2", "urllib.request"),
++    MovedAttribute("CacheFTPHandler", "urllib2", "urllib.request"),
++    MovedAttribute("UnknownHandler", "urllib2", "urllib.request"),
++    MovedAttribute("HTTPErrorProcessor", "urllib2", "urllib.request"),
++    MovedAttribute("urlretrieve", "urllib", "urllib.request"),
++    MovedAttribute("urlcleanup", "urllib", "urllib.request"),
++    MovedAttribute("URLopener", "urllib", "urllib.request"),
++    MovedAttribute("FancyURLopener", "urllib", "urllib.request"),
++    MovedAttribute("proxy_bypass", "urllib", "urllib.request"),
++    MovedAttribute("parse_http_list", "urllib2", "urllib.request"),
++    MovedAttribute("parse_keqv_list", "urllib2", "urllib.request"),
++]
++for attr in _urllib_request_moved_attributes:
++    setattr(Module_six_moves_urllib_request, attr.name, attr)
++del attr
++
++Module_six_moves_urllib_request._moved_attributes = _urllib_request_moved_attributes
++
++_importer._add_module(Module_six_moves_urllib_request(__name__ + ".moves.urllib.request"),
++                      "moves.urllib_request", "moves.urllib.request")
++
++
++class Module_six_moves_urllib_response(_LazyModule):
++
++    """Lazy loading of moved objects in six.moves.urllib_response"""
++
++
++_urllib_response_moved_attributes = [
++    MovedAttribute("addbase", "urllib", "urllib.response"),
++    MovedAttribute("addclosehook", "urllib", "urllib.response"),
++    MovedAttribute("addinfo", "urllib", "urllib.response"),
++    MovedAttribute("addinfourl", "urllib", "urllib.response"),
++]
++for attr in _urllib_response_moved_attributes:
++    setattr(Module_six_moves_urllib_response, attr.name, attr)
++del attr
++
++Module_six_moves_urllib_response._moved_attributes = _urllib_response_moved_attributes
++
++_importer._add_module(Module_six_moves_urllib_response(__name__ + ".moves.urllib.response"),
++                      "moves.urllib_response", "moves.urllib.response")
++
++
++class Module_six_moves_urllib_robotparser(_LazyModule):
++
++    """Lazy loading of moved objects in six.moves.urllib_robotparser"""
++
++
++_urllib_robotparser_moved_attributes = [
++    MovedAttribute("RobotFileParser", "robotparser", "urllib.robotparser"),
++]
++for attr in _urllib_robotparser_moved_attributes:
++    setattr(Module_six_moves_urllib_robotparser, attr.name, attr)
++del attr
++
++Module_six_moves_urllib_robotparser._moved_attributes = _urllib_robotparser_moved_attributes
++
++_importer._add_module(Module_six_moves_urllib_robotparser(__name__ + ".moves.urllib.robotparser"),
++                      "moves.urllib_robotparser", "moves.urllib.robotparser")
++
++
++class Module_six_moves_urllib(types.ModuleType):
++
++    """Create a six.moves.urllib namespace that resembles the Python 3 namespace"""
++    __path__ = []  # mark as package
++    parse = _importer._get_module("moves.urllib_parse")
++    error = _importer._get_module("moves.urllib_error")
++    request = _importer._get_module("moves.urllib_request")
++    response = _importer._get_module("moves.urllib_response")
++    robotparser = _importer._get_module("moves.urllib_robotparser")
++
++    def __dir__(self):
++        return ['parse', 'error', 'request', 'response', 'robotparser']
++
++_importer._add_module(Module_six_moves_urllib(__name__ + ".moves.urllib"),
++                      "moves.urllib")
++
++
++def add_move(move):
++    """Add an item to six.moves."""
++    setattr(_MovedItems, move.name, move)
++
++
++def remove_move(name):
++    """Remove item from six.moves."""
++    try:
++        delattr(_MovedItems, name)
++    except AttributeError:
++        try:
++            del moves.__dict__[name]
++        except KeyError:
++            raise AttributeError("no such move, %r" % (name,))
++
++
++if PY3:
++    _meth_func = "__func__"
++    _meth_self = "__self__"
++
++    _func_closure = "__closure__"
++    _func_code = "__code__"
++    _func_defaults = "__defaults__"
++    _func_globals = "__globals__"
++else:
++    _meth_func = "im_func"
++    _meth_self = "im_self"
++
++    _func_closure = "func_closure"
++    _func_code = "func_code"
++    _func_defaults = "func_defaults"
++    _func_globals = "func_globals"
++
++
++try:
++    advance_iterator = next
++except NameError:
++    def advance_iterator(it):
++        return it.next()
++next = advance_iterator
++
++
++try:
++    callable = callable
++except NameError:
++    def callable(obj):
++        return any("__call__" in klass.__dict__ for klass in type(obj).__mro__)
++
++
++if PY3:
++    def get_unbound_function(unbound):
++        return unbound
++
++    create_bound_method = types.MethodType
++
++    def create_unbound_method(func, cls):
++        return func
++
++    Iterator = object
++else:
++    def get_unbound_function(unbound):
++        return unbound.im_func
++
++    def create_bound_method(func, obj):
++        return types.MethodType(func, obj, obj.__class__)
++
++    def create_unbound_method(func, cls):
++        return types.MethodType(func, None, cls)
++
++    class Iterator(object):
++
++        def next(self):
++            return type(self).__next__(self)
++
++    callable = callable
++_add_doc(get_unbound_function,
++         """Get the function out of a possibly unbound function""")
++
++
++get_method_function = operator.attrgetter(_meth_func)
++get_method_self = operator.attrgetter(_meth_self)
++get_function_closure = operator.attrgetter(_func_closure)
++get_function_code = operator.attrgetter(_func_code)
++get_function_defaults = operator.attrgetter(_func_defaults)
++get_function_globals = operator.attrgetter(_func_globals)
++
++
++if PY3:
++    def iterkeys(d, **kw):
++        return iter(d.keys(**kw))
++
++    def itervalues(d, **kw):
++        return iter(d.values(**kw))
++
++    def iteritems(d, **kw):
++        return iter(d.items(**kw))
++
++    def iterlists(d, **kw):
++        return iter(d.lists(**kw))
++
++    viewkeys = operator.methodcaller("keys")
++
++    viewvalues = operator.methodcaller("values")
++
++    viewitems = operator.methodcaller("items")
++else:
++    def iterkeys(d, **kw):
++        return d.iterkeys(**kw)
++
++    def itervalues(d, **kw):
++        return d.itervalues(**kw)
++
++    def iteritems(d, **kw):
++        return d.iteritems(**kw)
++
++    def iterlists(d, **kw):
++        return d.iterlists(**kw)
++
++    viewkeys = operator.methodcaller("viewkeys")
++
++    viewvalues = operator.methodcaller("viewvalues")
++
++    viewitems = operator.methodcaller("viewitems")
++
++_add_doc(iterkeys, "Return an iterator over the keys of a dictionary.")
++_add_doc(itervalues, "Return an iterator over the values of a dictionary.")
++_add_doc(iteritems,
++         "Return an iterator over the (key, value) pairs of a dictionary.")
++_add_doc(iterlists,
++         "Return an iterator over the (key, [values]) pairs of a dictionary.")
++
++
++if PY3:
++    def b(s):
++        return s.encode("latin-1")
++
++    def u(s):
++        return s
++    unichr = chr
++    import struct
++    int2byte = struct.Struct(">B").pack
++    del struct
++    byte2int = operator.itemgetter(0)
++    indexbytes = operator.getitem
++    iterbytes = iter
++    import io
++    StringIO = io.StringIO
++    BytesIO = io.BytesIO
++    del io
++    _assertCountEqual = "assertCountEqual"
++    if sys.version_info[1] <= 1:
++        _assertRaisesRegex = "assertRaisesRegexp"
++        _assertRegex = "assertRegexpMatches"
++        _assertNotRegex = "assertNotRegexpMatches"
++    else:
++        _assertRaisesRegex = "assertRaisesRegex"
++        _assertRegex = "assertRegex"
++        _assertNotRegex = "assertNotRegex"
++else:
++    def b(s):
++        return s
++    # Workaround for standalone backslash
++
++    def u(s):
++        return unicode(s.replace(r'\\', r'\\\\'), "unicode_escape")
++    unichr = unichr
++    int2byte = chr
++
++    def byte2int(bs):
++        return ord(bs[0])
++
++    def indexbytes(buf, i):
++        return ord(buf[i])
++    iterbytes = functools.partial(itertools.imap, ord)
++    import StringIO
++    StringIO = BytesIO = StringIO.StringIO
++    _assertCountEqual = "assertItemsEqual"
++    _assertRaisesRegex = "assertRaisesRegexp"
++    _assertRegex = "assertRegexpMatches"
++    _assertNotRegex = "assertNotRegexpMatches"
++_add_doc(b, """Byte literal""")
++_add_doc(u, """Text literal""")
++
++
++def assertCountEqual(self, *args, **kwargs):
++    return getattr(self, _assertCountEqual)(*args, **kwargs)
++
++
++def assertRaisesRegex(self, *args, **kwargs):
++    return getattr(self, _assertRaisesRegex)(*args, **kwargs)
++
++
++def assertRegex(self, *args, **kwargs):
++    return getattr(self, _assertRegex)(*args, **kwargs)
++
++
++def assertNotRegex(self, *args, **kwargs):
++    return getattr(self, _assertNotRegex)(*args, **kwargs)
++
++
++if PY3:
++    exec_ = getattr(moves.builtins, "exec")
++
++    def reraise(tp, value, tb=None):
++        try:
++            if value is None:
++                value = tp()
++            if value.__traceback__ is not tb:
++                raise value.with_traceback(tb)
++            raise value
++        finally:
++            value = None
++            tb = None
++
++else:
++    def exec_(_code_, _globs_=None, _locs_=None):
++        """Execute code in a namespace."""
++        if _globs_ is None:
++            frame = sys._getframe(1)
++            _globs_ = frame.f_globals
++            if _locs_ is None:
++                _locs_ = frame.f_locals
++            del frame
++        elif _locs_ is None:
++            _locs_ = _globs_
++        exec("""exec _code_ in _globs_, _locs_""")
++
++    exec_("""def reraise(tp, value, tb=None):
++    try:
++        raise tp, value, tb
++    finally:
++        tb = None
++""")
++
++
++if sys.version_info[:2] > (3,):
++    exec_("""def raise_from(value, from_value):
++    try:
++        raise value from from_value
++    finally:
++        value = None
++""")
++else:
++    def raise_from(value, from_value):
++        raise value
++
++
++print_ = getattr(moves.builtins, "print", None)
++if print_ is None:
++    def print_(*args, **kwargs):
++        """The new-style print function for Python 2.4 and 2.5."""
++        fp = kwargs.pop("file", sys.stdout)
++        if fp is None:
++            return
++
++        def write(data):
++            if not isinstance(data, basestring):
++                data = str(data)
++            # If the file has an encoding, encode unicode with it.
++            if (isinstance(fp, file) and
++                    isinstance(data, unicode) and
++                    fp.encoding is not None):
++                errors = getattr(fp, "errors", None)
++                if errors is None:
++                    errors = "strict"
++                data = data.encode(fp.encoding, errors)
++            fp.write(data)
++        want_unicode = False
++        sep = kwargs.pop("sep", None)
++        if sep is not None:
++            if isinstance(sep, unicode):
++                want_unicode = True
++            elif not isinstance(sep, str):
++                raise TypeError("sep must be None or a string")
++        end = kwargs.pop("end", None)
++        if end is not None:
++            if isinstance(end, unicode):
++                want_unicode = True
++            elif not isinstance(end, str):
++                raise TypeError("end must be None or a string")
++        if kwargs:
++            raise TypeError("invalid keyword arguments to print()")
++        if not want_unicode:
++            for arg in args:
++                if isinstance(arg, unicode):
++                    want_unicode = True
++                    break
++        if want_unicode:
++            newline = unicode("\n")
++            space = unicode(" ")
++        else:
++            newline = "\n"
++            space = " "
++        if sep is None:
++            sep = space
++        if end is None:
++            end = newline
++        for i, arg in enumerate(args):
++            if i:
++                write(sep)
++            write(arg)
++        write(end)
++if sys.version_info[:2] < (3, 3):
++    _print = print_
++
++    def print_(*args, **kwargs):
++        fp = kwargs.get("file", sys.stdout)
++        flush = kwargs.pop("flush", False)
++        _print(*args, **kwargs)
++        if flush and fp is not None:
++            fp.flush()
++
++_add_doc(reraise, """Reraise an exception.""")
++
++if sys.version_info[0:2] < (3, 4):
++    # This does exactly the same what the :func:`py3:functools.update_wrapper`
++    # function does on Python versions after 3.2. It sets the ``__wrapped__``
++    # attribute on ``wrapper`` object and it doesn't raise an error if any of
++    # the attributes mentioned in ``assigned`` and ``updated`` are missing on
++    # ``wrapped`` object.
++    def _update_wrapper(wrapper, wrapped,
++                        assigned=functools.WRAPPER_ASSIGNMENTS,
++                        updated=functools.WRAPPER_UPDATES):
++        for attr in assigned:
++            try:
++                value = getattr(wrapped, attr)
++            except AttributeError:
++                continue
++            else:
++                setattr(wrapper, attr, value)
++        for attr in updated:
++            getattr(wrapper, attr).update(getattr(wrapped, attr, {}))
++        wrapper.__wrapped__ = wrapped
++        return wrapper
++    _update_wrapper.__doc__ = functools.update_wrapper.__doc__
++
++    def wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS,
++              updated=functools.WRAPPER_UPDATES):
++        return functools.partial(_update_wrapper, wrapped=wrapped,
++                                 assigned=assigned, updated=updated)
++    wraps.__doc__ = functools.wraps.__doc__
++
++else:
++    wraps = functools.wraps
++
++
++def with_metaclass(meta, *bases):
++    """Create a base class with a metaclass."""
++    # This requires a bit of explanation: the basic idea is to make a dummy
++    # metaclass for one level of class instantiation that replaces itself with
++    # the actual metaclass.
++    class metaclass(type):
++
++        def __new__(cls, name, this_bases, d):
++            if sys.version_info[:2] >= (3, 7):
++                # This version introduced PEP 560 that requires a bit
++                # of extra care (we mimic what is done by __build_class__).
++                resolved_bases = types.resolve_bases(bases)
++                if resolved_bases is not bases:
++                    d['__orig_bases__'] = bases
++            else:
++                resolved_bases = bases
++            return meta(name, resolved_bases, d)
++
++        @classmethod
++        def __prepare__(cls, name, this_bases):
++            return meta.__prepare__(name, bases)
++    return type.__new__(metaclass, 'temporary_class', (), {})
++
++
++def add_metaclass(metaclass):
++    """Class decorator for creating a class with a metaclass."""
++    def wrapper(cls):
++        orig_vars = cls.__dict__.copy()
++        slots = orig_vars.get('__slots__')
++        if slots is not None:
++            if isinstance(slots, str):
++                slots = [slots]
++            for slots_var in slots:
++                orig_vars.pop(slots_var)
++        orig_vars.pop('__dict__', None)
++        orig_vars.pop('__weakref__', None)
++        if hasattr(cls, '__qualname__'):
++            orig_vars['__qualname__'] = cls.__qualname__
++        return metaclass(cls.__name__, cls.__bases__, orig_vars)
++    return wrapper
++
++
++def ensure_binary(s, encoding='utf-8', errors='strict'):
++    """Coerce **s** to six.binary_type.
++
++    For Python 2:
++      - `unicode` -> encoded to `str`
++      - `str` -> `str`
++
++    For Python 3:
++      - `str` -> encoded to `bytes`
++      - `bytes` -> `bytes`
++    """
++    if isinstance(s, binary_type):
++        return s
++    if isinstance(s, text_type):
++        return s.encode(encoding, errors)
++    raise TypeError("not expecting type '%s'" % type(s))
++
++
++def ensure_str(s, encoding='utf-8', errors='strict'):
++    """Coerce *s* to `str`.
++
++    For Python 2:
++      - `unicode` -> encoded to `str`
++      - `str` -> `str`
++
++    For Python 3:
++      - `str` -> `str`
++      - `bytes` -> decoded to `str`
++    """
++    # Optimization: Fast return for the common case.
++    if type(s) is str:
++        return s
++    if PY2 and isinstance(s, text_type):
++        return s.encode(encoding, errors)
++    elif PY3 and isinstance(s, binary_type):
++        return s.decode(encoding, errors)
++    elif not isinstance(s, (text_type, binary_type)):
++        raise TypeError("not expecting type '%s'" % type(s))
++    return s
++
++
++def ensure_text(s, encoding='utf-8', errors='strict'):
++    """Coerce *s* to six.text_type.
++
++    For Python 2:
++      - `unicode` -> `unicode`
++      - `str` -> `unicode`
++
++    For Python 3:
++      - `str` -> `str`
++      - `bytes` -> decoded to `str`
++    """
++    if isinstance(s, binary_type):
++        return s.decode(encoding, errors)
++    elif isinstance(s, text_type):
++        return s
++    else:
++        raise TypeError("not expecting type '%s'" % type(s))
++
++
++def python_2_unicode_compatible(klass):
++    """
++    A class decorator that defines __unicode__ and __str__ methods under Python 2.
++    Under Python 3 it does nothing.
++
++    To support Python 2 and 3 with a single code base, define a __str__ method
++    returning text and apply this decorator to the class.
++    """
++    if PY2:
++        if '__str__' not in klass.__dict__:
++            raise ValueError("@python_2_unicode_compatible cannot be applied "
++                             "to %s because it doesn't define __str__()." %
++                             klass.__name__)
++        klass.__unicode__ = klass.__str__
++        klass.__str__ = lambda self: self.__unicode__().encode('utf-8')
++    return klass
++
++
++# Complete the moves implementation.
++# This code is at the end of this module to speed up module loading.
++# Turn this module into a package.
++__path__ = []  # required for PEP 302 and PEP 451
++__package__ = __name__  # see PEP 366 @ReservedAssignment
++if globals().get("__spec__") is not None:
++    __spec__.submodule_search_locations = []  # PEP 451 @UndefinedVariable
++# Remove other six meta path importers, since they cause problems. This can
++# happen if six is removed from sys.modules and then reloaded. (Setuptools does
++# this for some reason.)
++if sys.meta_path:
++    for i, importer in enumerate(sys.meta_path):
++        # Here's some real nastiness: Another "instance" of the six module might
++        # be floating around. Therefore, we can't use isinstance() to check for
++        # the six meta path importer, since the other six instance will have
++        # inserted an importer with different class.
++        if (type(importer).__name__ == "_SixMetaPathImporter" and
++                importer.name == __name__):
++            del sys.meta_path[i]
++            break
++    del i, importer
++# Finally, add the importer to the meta path import hook.
++sys.meta_path.append(_importer)
+diff --git a/yarss2/rssfeed_handling.py b/yarss2/rssfeed_handling.py
+index 00abde5..0d33eec 100644
+--- a/yarss2/rssfeed_handling.py
++++ b/yarss2/rssfeed_handling.py
+@@ -383,7 +383,7 @@ class RSSFeedHandler(object):
+     def handle_ttl(self, rssfeed_data, rssfeed_parsed, fetch_data):
+         if rssfeed_data["obey_ttl"] is False:
+             return
+-        if "ttl" in rssfeed_parsed:
++        if "ttl" in rssfeed_parsed and rssfeed_parsed["ttl"] is not None:
+             # Value is already TTL, so ignore
+             try:
+                 ttl = int(rssfeed_parsed["ttl"])
+@@ -396,7 +396,7 @@ class RSSFeedHandler(object):
+                 else:
+                     self.log.warning("TTL value is invalid: %d" % ttl)
+             except (ValueError, TypeError):
+-                self.log.warning("Failed to convert TTL value '%s' to int!" % rssfeed_parsed["ttl"])
++                self.log.warning("Failed to convert TTL value '%s' to int!" % str(rssfeed_parsed["ttl"]))
+         else:
+             self.log.warning("RSS Feed '%s' should obey TTL, but feed has no TTL value." %
+                              rssfeed_data["name"])
+diff --git a/yarss2/torrent_handling.py b/yarss2/torrent_handling.py
+index 60f0456..2cdb5a9 100644
+--- a/yarss2/torrent_handling.py
++++ b/yarss2/torrent_handling.py
+@@ -33,34 +33,63 @@ class TorrentHandler(object):
+         download = TorrentDownload()
+         download.url = torrent_url
+         download.cookies = cookies
+-        args = {"verify": False}
++        args = {"verify": False, "timeout": 30}  # Add 30 second timeout
+         if cookies is not None:
+             args["cookies"] = cookies
+         if headers is not None:
+             args["headers"] = headers
+         download.headers = headers
++
+         try:
++            self.log.info("Requesting torrent file from: %s" % torrent_url)
+             r = requests.get(torrent_url, **args)
++
++            # Check HTTP status
++            if r.status_code != 200:
++                error_msg = "HTTP %d error downloading torrent: '%s'" % (r.status_code, torrent_url)
++                self.log.error(error_msg)
++                download.set_error(error_msg)
++                return download
++
++            # Check content type
++            content_type = r.headers.get('content-type', '').lower()
++            if 'html' in content_type:
++                error_msg = "Received HTML instead of torrent file from: '%s'. Content-Type: %s" % (torrent_url, content_type)
++                self.log.error(error_msg)
++                # Log first 500 chars of response for debugging
++                preview = r.text[:500] if hasattr(r, 'text') else str(r.content[:500])
++                self.log.error("Response preview: %s" % preview)
++                download.set_error(error_msg)
++                return download
++
+             download.filedump = r.content
++            self.log.info("Downloaded %d bytes from: %s" % (len(download.filedump), torrent_url))
++
+         except Exception as e:
+             error_msg = "Failed to download torrent url: '%s'. Exception: %s" % (torrent_url, str(e))
+             self.log.error(error_msg)
+             download.set_error(error_msg)
+             return download
+ 
+-        if download.filedump is None:
+-            error_msg = "Filedump is None"
++        if download.filedump is None or len(download.filedump) == 0:
++            error_msg = "Received empty file from: '%s'" % torrent_url
+             download.set_error(error_msg)
+-            self.log.warning(error_msg)
++            self.log.error(error_msg)
+             return download
+ 
+         try:
+             # Get the info to see if any exceptions are raised
+             lt.torrent_info(lt.bdecode(download.filedump))
++            self.log.info("Successfully validated torrent file from: %s" % torrent_url)
+         except Exception as e:
+             error_msg = "Unable to decode torrent file! (%s) URL: '%s'" % (str(e), torrent_url)
+             download.set_error(error_msg)
+             self.log.error(error_msg)
++            # Log first 200 bytes for debugging
++            preview = download.filedump[:200] if download.filedump else b"<None>"
++            self.log.error("File content preview: %s" % preview)
++            return download
++
+         return download
+ 
+     def get_torrent(self, torrent_info):
+@@ -82,15 +111,21 @@ class TorrentHandler(object):
+             self.log.info("Downloading torrent: '%s' using cookies: '%s', headers: '%s'" %
+                           (url, str(site_cookies_dict), str(headers)), gtkui=True)
+             download = self.download_torrent_file(url, cookies=site_cookies_dict, headers=headers)
++            # Store the URL for debugging
++            download.url = url
+             # Error occured
+             if not download.success:
++                self.log.error("Failed to download torrent from: %s. Error: %s" % (url, download.error_msg))
+                 return download
+-            # Get the torrent data from the torrent file
++            # Get the torrent data from the torrent file - this is redundant validation since
++            # download_torrent_file already validates, but keeping for compatibility
+             try:
+                 torrentinfo.TorrentInfo(filedump=download.filedump)
++                self.log.info("Torrent validation successful for: %s" % url)
+             except Exception as e:
+                 download.set_error("Unable to open torrent file: %s. Error: %s" % (url, str(e)))
+                 self.log.warning(download.error_msg)
++                return download  # Return early on validation failure
+         return download
+ 
+     def add_torrent(self, torrent_info):
+@@ -148,15 +183,22 @@ class TorrentHandler(object):
+             except Exception as e:
+                 download.set_error("Unable to open torrent file: %s. Error: %s" % (torrent_url, str(e)))
+                 self.log.warning(download.error_msg)
++                return download  # Return early if torrent validation fails
+ 
+             try:
++                self.log.info("Calling TorrentManager.add() with %d bytes of torrent data" % len(download.filedump))
+                 download.torrent_id = component.get("TorrentManager").add(filedump=download.filedump,
+                                                                           filename=os.path.basename(torrent_url),
+                                                                           options=options)
++                self.log.info("Successfully added torrent to Deluge with ID: %s" % download.torrent_id)
+             except AddTorrentError as err:
+                 download.success = False
+                 download.set_error("Failed to add torrent to Deluge: %s" % (str(err)))
+                 self.log.warning(download.error_msg)
++            except Exception as err:
++                download.success = False
++                download.set_error("Unexpected error adding torrent to Deluge: %s" % (str(err)))
++                self.log.error(download.error_msg)
+             else:
+                 if ("Label" in component.get("Core").get_enabled_plugins()
+                         and subscription_data and subscription_data.get("label", "")):
+diff --git a/yarss2/util/common.py b/yarss2/util/common.py
+index b0ee158..6449e02 100644
+--- a/yarss2/util/common.py
++++ b/yarss2/util/common.py
+@@ -6,7 +6,6 @@
+ # the additional special exception to link portions of this program with the OpenSSL library.
+ # See LICENSE for more details.
+ #
+-from __future__ import print_function
+ 
+ import datetime
+ import os
+@@ -14,9 +13,6 @@ import sys
+ 
+ import pkg_resources
+ 
+-PY2 = sys.version_info.major == 2
+-PY3 = sys.version_info.major == 3
+-
+ 
+ def get_version():
+     """
+@@ -86,7 +82,7 @@ def isodate_to_datetime(date_in_isoformat):
+     except ValueError as err:
+         from yarss2.util import logging
+         log = logging.getLogger(__name__)
+-        log.warning("isodate_to_datetime error:", err)
++        log.warning("isodate_to_datetime error: %s" % str(err))
+         return get_default_date()
+ 
+ 
+@@ -198,61 +194,103 @@ def is_hidden(filepath):
+     return name.startswith('.')
+ 
+ 
+-def get_completion_paths(args):
++def get_subdirs(dirname):
++    """
++    Return a list of subdirectories for the given path
++    (including the given path)
+     """
+-    Takes a path value and returns the available completions.
+-    If the path_value is a valid path, return all sub-directories.
+-    If the path_value is not a valid path, remove the basename from the
+-    path and return all sub-directories of path that start with basename.
++    dirlist = []
++    if os.path.isdir(dirname):
++        dirlist.append(dirname)
++        for subdir in os.listdir(dirname):
++            subdirpath = os.path.join(dirname, subdir)
++            if os.path.isdir(subdirpath):
++                dirlist.append(subdirpath)
++    return dirlist
+ 
+-    :param args: options
+-    :type args: dict
+-    :returns: the args argument containing the available completions for the completion_text
+-    :rtype: list
+ 
++def get_completion_paths(opts):
+     """
+-    args["paths"] = []
+-    path_value = args["completion_text"]
+-    hidden_files = args["show_hidden_files"]
++    Returns the available path completions for the input value.
++
++    Args:
++        opts (dict): Dictionary containing completion options with keys:
++            - completion_text: The text to complete
++            - forward_completion: Whether this is forward completion
+ 
+-    def get_subdirs(dirname):
++    Returns:
++        dict: Dictionary with 'paths' key containing list of completion paths
++    """
++    completion_text = opts.get('completion_text', '')
++
++    # Handle empty string
++    if not completion_text:
+         try:
+-            if PY2:
+-                return os.walk(dirname).__next__[1]
+-            else:
+-                return next(os.walk(dirname))[1]
+-        except StopIteration:
+-            # Invalid dirname
+-            return []
+-
+-    dirname = os.path.dirname(path_value)
+-    basename = os.path.basename(path_value)
+-
+-    dirs = get_subdirs(dirname)
+-    # No completions available
+-    if not dirs:
+-        return args
+-
+-    # path_value ends with path separator so
+-    # we only want all the subdirectories
+-    if not basename:
+-        # Lets remove hidden files
+-        if not hidden_files:
+-            old_dirs = dirs
+-            dirs = []
+-            for d in old_dirs:
+-                if not is_hidden(os.path.join(dirname, d)):
+-                    dirs.append(d)
+-    matching_dirs = []
+-    for s in dirs:
+-        if s.startswith(basename):
+-            p = os.path.join(dirname, s)
+-            if not p.endswith(os.path.sep):
+-                p += os.path.sep
+-            matching_dirs.append(p)
+-
+-    args["paths"] = sorted(matching_dirs)
+-    return args
++            paths = [os.path.expanduser('~')]
++            return {'paths': paths, 'completion_text': completion_text,
++                   'forward_completion': opts.get('forward_completion', True)}
++        except Exception:
++            return {'paths': [], 'completion_text': completion_text,
++                   'forward_completion': opts.get('forward_completion', True)}
++
++    # Expand user home directory
++    path = os.path.expanduser(completion_text)
++
++    # Get directory part
++    if os.path.isdir(path):
++        directory = path
++        filename_start = ''
++    else:
++        directory = os.path.dirname(path)
++        filename_start = os.path.basename(path)
++
++    # Get list of matching paths
++    paths = []
++    try:
++        if os.path.isdir(directory):
++            for item in os.listdir(directory):
++                if item.startswith(filename_start):
++                    full_path = os.path.join(directory, item)
++                    if os.path.isdir(full_path):
++                        # Add trailing slash for directories
++                        full_path = os.path.join(full_path, '')
++                    paths.append(full_path)
++
++            # Sort the paths
++            paths.sort()
++    except (OSError, IOError):
++        # If we can't read the directory, return empty list
++        paths = []
++
++    return {
++        'paths': paths,
++        'completion_text': completion_text,
++        'forward_completion': opts.get('forward_completion', True)
++    }
++
++
++def py3k_string_is_unicode(s):
++    """
++    True if string is Unicode string
++    """
++    return isinstance(s, str)
++
++
++def py3k_string_is_bytes(s):
++    """
++    True if string is bytes string
++    """
++    return isinstance(s, bytes)
++
++
++def py3k_string_as_unicode(s):
++    """
++    Convert string to unicode in a python3 compatible way.
++    """
++    if isinstance(s, bytes):
++        return s.decode("utf-8")
++    else:
++        return s
+ 
+ 
+ class GeneralSubsConf:
+@@ -265,10 +303,13 @@ class GeneralSubsConf:
+         pass
+ 
+     def get_boolean(self, value):
+-        """input value should not be GeneralSubsConf.DEFAULT"""
+-        return False if value == GeneralSubsConf.DISABLED else True
++        return value == GeneralSubsConf.ENABLED
+ 
+     def bool_to_value(self, enabled, default):
++        """
++        enabled: if this value is set or not
++        default: if this value is default or not
++        """
+         if default:
+             return GeneralSubsConf.DEFAULT
+         elif enabled:
+@@ -279,14 +320,25 @@ class GeneralSubsConf:
+ 
+ class TorrentDownload(dict):
+     def __init__(self, d={}):
+-        self["filedump"] = None
+-        self["error_msg"] = None
++        dict.__init__(self)
+         self["torrent_id"] = None
+-        self["success"] = True
++        self["torrent_url"] = None
++        self["title"] = None
++        self["link"] = None
++        self["site_cookies_dict"] = None
++        self["user_agent"] = None
++        self["error_msg"] = None
++        self["success"] = True  # Default to success, set to False only on error
++        self["torrent_data"] = None
++        self["magnet"] = None
++        self["is_magnet"] = False  # Default to False for regular torrents
+         self["url"] = None
+-        self["is_magnet"] = False
+-        self["cookies_dict"] = None
+-        self.update(d)
++        self["filedump"] = None
++        self["cookies"] = None
++        self["headers"] = None
++        # Copy all keys in the dictionary d
++        for key in d.keys():
++            self[key] = d[key]
+ 
+     def __getattr__(self, attr):
+         return self[attr]
+@@ -299,4 +351,4 @@ class TorrentDownload(dict):
+         self["success"] = False
+ 
+     def to_dict(self):
+-        return self.copy()
++        return dict(self)
+diff --git a/yarss2/util/http.py b/yarss2/util/http.py
+index 836f32f..9686eb3 100644
+--- a/yarss2/util/http.py
++++ b/yarss2/util/http.py
+@@ -8,24 +8,10 @@
+ #
+ 
+ import re
+-
+-PY2 = False
+-PY3 = False
+-
+-try:
+-    import urllib.parse as urlparse
+-    from urllib.parse import quote as urllib_quote
+-    from urllib.parse import quote_plus as urllib_quote_plus
+-    from html.parser import HTMLParser
+-    unicode = str
+-    PY3 = True
+-except ImportError:
+-    # python 2
+-    import urlparse
+-    from urllib import quote as urllib_quote
+-    from urllib import quote_plus as urllib_quote_plus
+-    from HTMLParser import HTMLParser
+-    PY2 = True
++import urllib.parse as urlparse
++from urllib.parse import quote as urllib_quote
++from urllib.parse import quote_plus as urllib_quote_plus
++from html.parser import HTMLParser
+ 
+ 
+ def download_file(url_file_stream_or_string, site_cookies_dict=None, etag=None, modified=None, user_agent=None,
+@@ -102,8 +88,9 @@ def url_fix(s, charset='utf-8'):
+     :param charset: The target charset for the URL if the url was
+                     given as unicode string.
+     """
+-    if PY2 and isinstance(s, unicode):
+-        s = s.encode(charset, 'ignore')
++    # In Python 3.9+, strings are always unicode
++    if isinstance(s, bytes):
++        s = s.decode(charset, 'ignore')
+ 
+     scheme, netloc, path, qs, anchor = urlparse.urlsplit(s)
+     path = urllib_quote(path, safe="%/:=&?~#+!$,;'@()*[]")
